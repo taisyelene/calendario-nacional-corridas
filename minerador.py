@@ -14,7 +14,7 @@ def minerar_corridas_brasil():
     print("🚀 Iniciando o Robô Minerador Atualizado do Pace & Pixels...")
     
     # Vamos focar inicialmente em SP e GO para garantir o teste
-    estados_alvo = ["SP", "GO"]
+    estados_alvo = ["SP", "RJ", "MG", "GO", "DF", "SC", "PR", "RS", "BA", "CE"]
     todas_corridas = []
     
     headers = {
