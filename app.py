@@ -17,6 +17,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- INSIRA O ID DA SUA PLANILHA DO GOOGLE SHEETS AQUI ---
+# Lembre-se de deixar a sua planilha como "Qualquer pessoa com o link pode ler" no botão Compartilhar do Google
+ID_PLANILHA = "1A0kBTwhI5SY1Fa5DIJL5BvqK_nqHijmBSJtEOGg2qy"
+
 # Estilização CSS customizada para deixar o visual moderno, limpo e profissional
 st.markdown("""
     <style>
@@ -109,65 +113,81 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Função para carregar os dados das corridas
-@st.cache_data(ttl=600)
-def carregar_dados():
-    # Caminho do arquivo gerado pelo robô
-    arquivo_csv = "corridas_automaticas.csv"
+# Função robusta para carregar as duas bases de dados (Automática + Manual)
+def carregar_dados_completos():
+    colunas_padrao = ["Mês", "Estado", "Data", "Corrida", "Distâncias", "Inscrição"]
     
+    # 1. Tenta carregar as corridas do Robô (Local)
+    df_auto = pd.DataFrame(columns=colunas_padrao)
+    arquivo_csv = "corridas_automaticas.csv"
     if os.path.exists(arquivo_csv):
         try:
-            df = pd.read_csv(arquivo_csv)
-            # Garante que as colunas essenciais existem e estão formatadas
-            colunas_obrigatorias = ["Mês", "Estado", "Data", "Corrida", "Distâncias", "Inscrição"]
-            for col in colunas_obrigatorias:
-                if col not in df.columns:
-                    df[col] = ""
-            return df
+            df_auto = pd.read_csv(arquivo_csv)
+            # Garante que as colunas obrigatórias existem
+            for col in colunas_padrao:
+                if col not in df_auto.columns:
+                    df_auto[col] = ""
         except Exception as e:
-            st.error(f"Erro ao ler os dados locais: {e}")
-            return pd.DataFrame()
+            st.sidebar.error(f"Erro ao ler corridas automáticas: {e}")
+
+    # 2. Tenta carregar as corridas do Google Sheets (Manual)
+    df_manual = pd.DataFrame(columns=colunas_padrao)
+    if ID_PLANILHA and ID_PLANILHA != "SEU_ID_DO_GOOGLE_SHEETS_AQUI":
+        try:
+            # Link de exportação direta em CSV para o Pandas ler instantaneamente
+            url_sheets = f"https://docs.google.com/spreadsheets/d/{ID_PLANILHA}/export?format=csv"
+            df_manual = pd.read_csv(url_sheets)
+            
+            # Padroniza as colunas da planilha para o caso de digitação diferente
+            df_manual.columns = [c.strip() for c in df_manual.columns]
+            for col in colunas_padrao:
+                if col not in df_manual.columns:
+                    df_manual[col] = ""
+            df_manual = df_manual[colunas_padrao]
+        except Exception as e:
+            st.sidebar.warning("⚠️ Não foi possível conectar ao Google Sheets. Mostrando apenas dados locais.")
+            
+    # 3. Une e remove duplicados reais (baseado na combinação de Data e Nome da Corrida)
+    if not df_auto.empty or not df_manual.empty:
+        df_unido = pd.concat([df_auto, df_manual], ignore_index=True)
+        # Limpa espaços extras para evitar duplicados bobos
+        df_unido["Corrida"] = df_unido["Corrida"].astype(str).str.strip()
+        df_unido["Data"] = df_unido["Data"].astype(str).str.strip()
+        df_unido = df_unido.drop_duplicates(subset=["Data", "Corrida"])
+        return df_unido
     else:
-        # Banco de dados reserva caso o robô ainda não tenha rodado nenhuma vez
+        # Banco de dados reserva caso tudo falhe
         dados_reserva = [
-            {"Mês": "Julho", "Estado": "SP", "Data": "12/07/2026", "Corrida": "Circuito Family Running - Etapa Capital", "Distâncias": "5K, 10K", "Inscrição": "https://www.ticketsports.com.br"},
-            {"Mês": "Julho", "Estado": "GO", "Data": "19/07/2026", "Corrida": "Circuito das Estações - Etapa Goiânia", "Distâncias": "5K, 10K", "Inscrição": "https://www.ticketsports.com.br"},
-            {"Mês": "Julho", "Estado": "DF", "Data": "26/07/2026", "Corrida": "Circuito Caixa Seguridade - Brasília", "Distâncias": "5K, 10K, 21K", "Inscrição": "https://www.ticketsports.com.br"},
-            {"Mês": "Agosto", "Estado": "RJ", "Data": "09/08/2026", "Corrida": "Meia Maratona do Rio de Janeiro 2026", "Distâncias": "5K, 10K, 21K", "Inscrição": "https://www.ticketsports.com.br"},
-            {"Mês": "Setembro", "Estado": "MG", "Data": "13/09/2026", "Corrida": "Volta da Pampulha - Belo Horizonte", "Distâncias": "18K", "Inscrição": "https://www.ticketsports.com.br"}
+            {"Mês": "Julho", "Estado": "SP", "Data": "12/07/2026", "Corrida": "Circuito Family Running - Etapa Capital (Reserva)", "Distâncias": "5K, 10K", "Inscrição": "https://www.ticketsports.com.br"},
+            {"Mês": "Julho", "Estado": "GO", "Data": "19/07/2026", "Corrida": "Circuito das Estações - Etapa Goiânia (Reserva)", "Distâncias": "5K, 10K", "Inscrição": "https://www.ticketsports.com.br"}
         ]
         return pd.DataFrame(dados_reserva)
 
-# Carrega a base de dados
-df_completo = carregar_dados()
+# Carrega a base de dados unificada
+df_completo = carregar_dados_completos()
 
 # Título Principal do Portal
 st.title("🏃‍♂️ Pace & Pixels")
 st.subheader("Calendário Nacional de Corridas de Rua")
 
 if df_completo.empty:
-    st.warning("Nenhum dado de corrida encontrado. Rode o minerador.py para gerar a lista de provas!")
+    st.warning("Nenhum dado de corrida encontrado. Rode o minerador.py para gerar as provas automáticas!")
 else:
     # Extrai todas as distâncias individuais de forma inteligente e limpa
     todas_distancias = set()
     for dist_str in df_completo["Distâncias"].dropna().astype(str):
-        # Divide por vírgula, remove espaços e padroniza para maiúsculo
         partes = [d.strip().upper() for d in dist_str.split(",") if d.strip()]
         todas_distancias.update(partes)
     
-    # Remove textos genéricos/informativos das opções de filtro
     termos_ignorar = {"CONSULTAR SITE", "CONSULTAR NO SITE", "A CONSULTAR", "OUTRO"}
     dist_limpas = {d for d in todas_distancias if d not in termos_ignorar and len(d) <= 10}
     
-    # Ordena as distâncias (ex: 5K, 10K, 21K, 42K)
     def ordenar_distancias(item):
-        # Tenta extrair o número para ordenar numericamente (ex: "5K" -> 5)
         numeros = "".join([c for c in item if c.isdigit()])
         return int(numeros) if numeros else 999
         
     dist_ordenadas = sorted(list(dist_limpas), key=ordenar_distancias)
 
-    # --- BARRA LATERAL (FILTROS) ---
     st.sidebar.header("🔍 Filtros de Busca")
     
     # 1. Filtro de Estado
@@ -178,7 +198,7 @@ else:
     meses_disponiveis = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     filtro_mes = st.sidebar.selectbox("Selecionar Mês:", meses_disponiveis)
 
-    # 3. Filtro de Distâncias (Múltipla Escolha para maior flexibilidade!)
+    # 3. Filtro de Distâncias
     filtro_distancias = st.sidebar.multiselect(
         "Selecionar Distâncias (KM):", 
         options=dist_ordenadas,
@@ -195,16 +215,13 @@ else:
         df_filtrado = df_filtrado[df_filtrado["Mês"] == filtro_mes]
 
     if filtro_distancias:
-        # Mantém a corrida se ela tiver pelo menos uma das distâncias escolhidas pelo usuário
         mascara = df_filtrado["Distâncias"].apply(
             lambda x: any(dist in str(x).upper() for dist in filtro_distancias) if pd.notna(x) else False
         )
         df_filtrado = df_filtrado[mascara]
 
-    # --- PROCESSAMENTO DE MÉTRICAS ---
     total_provas = len(df_filtrado)
     
-    # Encontra a prova mais próxima da data atual
     prova_destaque_nome = "Nenhuma encontrada"
     prova_destaque_meta = "Ajuste os filtros"
     
@@ -213,7 +230,6 @@ else:
     
     for idx, row in df_filtrado.iterrows():
         try:
-            # Tenta converter a data da prova para comparação (Padrão DD/MM/AAAA)
             data_str = str(row["Data"]).split()[0]
             data_dt = datetime.strptime(data_str, "%d/%m/%Y")
             if data_dt >= hoje:
@@ -222,7 +238,6 @@ else:
             continue
             
     if provas_futuras:
-        # Ordena pela data mais próxima do dia de hoje
         provas_futuras.sort(key=lambda x: x[0])
         proxima_prova = provas_futuras[0]
         prova_destaque_nome = proxima_prova[1]
@@ -232,14 +247,12 @@ else:
     col1, col2, col3 = st.columns([1, 1.8, 1.2])
     
     with col1:
-        # Total de provas encontradas com base nos filtros
         st.metric(
             label="Provas Encontradas", 
             value=f"{total_provas} eventos"
         )
         
     with col2:
-        # Card customizado com HTML para o Destaque da Próxima Prova (Diminuído para caber tudo!)
         html_card = f"""
         <div class="destaque-card">
             <div class="destaque-titulo">🎯 Próxima Prova em Destaque</div>
@@ -250,14 +263,12 @@ else:
         st.markdown(html_card, unsafe_allow_html=True)
         
     with col3:
-        # Exibe o total por estado selecionado ou o estado líder em eventos
         if filtro_estado != "Todos":
             st.metric(
                 label=f"Eventos em {filtro_estado}", 
                 value=f"{total_provas} provas"
             )
         else:
-            # Mostra qual estado tem mais eventos cadastrados no momento
             if not df_filtrado.empty:
                 ranking_estados = df_filtrado["Estado"].value_counts()
                 estado_lider = ranking_estados.index[0]
@@ -271,19 +282,17 @@ else:
 
     st.markdown("---")
 
-    # --- SEÇÃO 1: DISTRIBUIÇÃO E ESTATÍSTICAS (NO TOPO) ---
+    # --- SEÇÃO 1: GRÁFICOS E TOTAIS NO TOPO ---
     st.subheader("📊 Distribuição de Provas por Estado")
     
     col_grafico, col_lista = st.columns([1.8, 1.2])
     
     with col_grafico:
         if not df_completo.empty:
-            # Agrupa os dados reais por estado para mostrar o total de cada um deles
             contagem_estados = df_completo["Estado"].value_counts().reset_index()
             contagem_estados.columns = ["Estado", "Total de Provas"]
             contagem_estados = contagem_estados.sort_values(by="Total de Provas", ascending=True)
             
-            # Gráfico de barras horizontal nativo e super limpo do Streamlit
             st.bar_chart(
                 data=contagem_estados,
                 x="Estado",
@@ -295,10 +304,8 @@ else:
 
     with col_lista:
         if not df_completo.empty:
-            # Pequeno painel de texto informativo com os totais exatos por estado
             st.markdown("<p style='font-weight: 600; margin-bottom: 8px;'>Total de Eventos Cadastrados:</p>", unsafe_allow_html=True)
             
-            # Divide os estados em duas colunas menores internas para poupar espaço vertical
             col_list_1, col_list_2 = st.columns(2)
             estados_ordenados = contagem_estados.sort_values(by="Total de Provas", ascending=False)
             metade = (len(estados_ordenados) + 1) // 2
@@ -314,14 +321,12 @@ else:
 
     st.markdown("---")
 
-    # --- SEÇÃO 2: CALENDÁRIO COMPLETO (ABAIXO, COM LARGURA MÁXIMA) ---
+    # --- SEÇÃO 2: CALENDÁRIO COMPLETO ABAIXO ---
     st.subheader("🗓️ Calendário de Corridas")
     
     if not df_filtrado.empty:
-        # Formatação amigável para exibição da tabela
         df_exibicao = df_filtrado[["Data", "Corrida", "Estado", "Distâncias", "Inscrição"]].copy()
         
-        # Deixa a coluna de inscrição clicável
         def criar_link(link):
             if pd.isna(link) or not str(link).startswith("http"):
                 return "Acessar Site"
@@ -329,7 +334,6 @@ else:
             
         df_exibicao["Inscrição"] = df_exibicao["Inscrição"].apply(criar_link)
         
-        # Renderiza a tabela bonita em HTML ocupando toda a largura da tela
         st.write(
             df_exibicao.to_html(escape=False, index=False), 
             unsafe_allow_html=True
@@ -337,6 +341,6 @@ else:
     else:
         st.info("Nenhuma corrida encontrada para os filtros selecionados.")
 
-# Rodapé simples
+# Rodapé
 st.markdown("---")
 st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 12px;'>Pace & Pixels © 2026 | Desenvolvido para Corredores</div>", unsafe_allow_html=True)
