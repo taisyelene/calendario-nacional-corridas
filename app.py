@@ -132,7 +132,7 @@ def carregar_dados_completos():
 
     # 2. Tenta carregar as corridas do Google Sheets (Manual)
     df_manual = pd.DataFrame(columns=colunas_padrao)
-    if ID_PLANILHA and ID_PLANILHA != "SEU_ID_DO_GOOGLE_SHEETS_AQUI":
+    if ID_PLANILHA and ID_PLANILHA != "1A0kBTwhI5SY1Fa5DIJL5BvqK_nqHijmBSJtEOGg2qyE":
         try:
             # Link de exportação direta em CSV para o Pandas ler instantaneamente
             url_sheets = f"https://docs.google.com/spreadsheets/d/{ID_PLANILHA}/export?format=csv"
