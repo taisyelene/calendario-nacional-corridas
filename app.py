@@ -82,6 +82,30 @@ st.markdown("""
             color: #475569;
             font-weight: 600;
         }
+        
+        /* Estilização para deixar a tabela HTML limpa e responsiva */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 14px;
+            text-align: left;
+        }
+        th {
+            background-color: #f1f5f9;
+            color: #475569;
+            font-weight: 600;
+            padding: 12px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #334155;
+        }
+        tr:hover {
+            background-color: #f8fafc;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -247,33 +271,12 @@ else:
 
     st.markdown("---")
 
-    # --- GRÁFICO E CONTEÚDO PRINCIPAL ---
-    col_tabela, col_grafico = st.columns([1.8, 1.2])
+    # --- SEÇÃO 1: DISTRIBUIÇÃO E ESTATÍSTICAS (NO TOPO) ---
+    st.subheader("📊 Distribuição de Provas por Estado")
     
-    with col_tabela:
-        st.subheader("🗓️ Calendário de Corridas")
-        
-        # Formatação amigável para exibição da tabela
-        df_exibicao = df_filtrado[["Data", "Corrida", "Estado", "Distâncias", "Inscrição"]].copy()
-        
-        # Deixa a coluna de inscrição clicável
-        def criar_link(link):
-            if pd.isna(link) or not str(link).startswith("http"):
-                return "Acessar Site"
-            return f'<a href="{link}" target="_blank">Inscrição 🏃‍♂️</a>'
-            
-        df_exibicao["Inscrição"] = df_exibicao["Inscrição"].apply(criar_link)
-        
-        # Renderiza a tabela bonita em HTML com suporte a links funcionais
-        st.write(
-            df_exibicao.to_html(escape=False, index=False), 
-            unsafe_allow_html=True
-        )
-
+    col_grafico, col_lista = st.columns([1.8, 1.2])
+    
     with col_grafico:
-        # Seletor dinâmico de gráfico baseado na requisição do usuário (Total por Estado)
-        st.subheader("📊 Distribuição de Provas")
-        
         if not df_completo.empty:
             # Agrupa os dados reais por estado para mostrar o total de cada um deles
             contagem_estados = df_completo["Estado"].value_counts().reset_index()
@@ -287,13 +290,52 @@ else:
                 y="Total de Provas",
                 use_container_width=True
             )
-            
-            # Pequeno painel de texto informativo com os totais exatos por estado
-            st.markdown("**Lista de Provas por Estado:**")
-            for idx, row in contagem_estados.sort_values(by="Total de Provas", ascending=False).iterrows():
-                st.write(f"📍 **{row['Estado']}**: {row['Total de Provas']} provas cadastradas")
         else:
             st.info("Sem dados suficientes para gerar os gráficos por estado.")
+
+    with col_lista:
+        if not df_completo.empty:
+            # Pequeno painel de texto informativo com os totais exatos por estado
+            st.markdown("<p style='font-weight: 600; margin-bottom: 8px;'>Total de Eventos Cadastrados:</p>", unsafe_allow_html=True)
+            
+            # Divide os estados em duas colunas menores internas para poupar espaço vertical
+            col_list_1, col_list_2 = st.columns(2)
+            estados_ordenados = contagem_estados.sort_values(by="Total de Provas", ascending=False)
+            metade = (len(estados_ordenados) + 1) // 2
+            
+            with col_list_1:
+                for idx, row in estados_ordenados.iloc[:metade].iterrows():
+                    st.markdown(f"📍 **{row['Estado']}**: {row['Total de Provas']} provas")
+            with col_list_2:
+                for idx, row in estados_ordenados.iloc[metade:].iterrows():
+                    st.markdown(f"📍 **{row['Estado']}**: {row['Total de Provas']} provas")
+        else:
+            st.info("Sem dados cadastrados.")
+
+    st.markdown("---")
+
+    # --- SEÇÃO 2: CALENDÁRIO COMPLETO (ABAIXO, COM LARGURA MÁXIMA) ---
+    st.subheader("🗓️ Calendário de Corridas")
+    
+    if not df_filtrado.empty:
+        # Formatação amigável para exibição da tabela
+        df_exibicao = df_filtrado[["Data", "Corrida", "Estado", "Distâncias", "Inscrição"]].copy()
+        
+        # Deixa a coluna de inscrição clicável
+        def criar_link(link):
+            if pd.isna(link) or not str(link).startswith("http"):
+                return "Acessar Site"
+            return f'<a href="{link}" target="_blank" style="text-decoration: none; color: #3b82f6; font-weight: 600;">Inscrição 🏃‍♂️</a>'
+            
+        df_exibicao["Inscrição"] = df_exibicao["Inscrição"].apply(criar_link)
+        
+        # Renderiza a tabela bonita em HTML ocupando toda a largura da tela
+        st.write(
+            df_exibicao.to_html(escape=False, index=False), 
+            unsafe_allow_html=True
+        )
+    else:
+        st.info("Nenhuma corrida encontrada para os filtros selecionados.")
 
 # Rodapé simples
 st.markdown("---")
