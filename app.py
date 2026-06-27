@@ -4,65 +4,94 @@ Created on Sat Jun 27 15:08:07 2026
 
 @author: peque
 """
-
-import streamlit as st
+import os
 import pandas as pd
+import streamlit as st
 
-# Configuração da página pública do portal
 st.set_page_config(
-    page_title="Calendário Nacional de Corridas de Rua",
+    page_title="Portal da Comunidade - Corridas de Rua",
     page_icon="🏃‍♂️",
-    layout="wide"
+    layout="wide",
 )
 
-# Cabeçalho do Portal Público
 st.title("🏃‍♂️ Calendário Nacional de Corridas de Rua")
-st.markdown("Encontre seu próximo desafio! Filtre por região, mês ou distância e clique no link para se inscrever.")
+st.markdown("O buscador inteligente alimentado por robôs e pela comunidade.")
 
-# 1. Banco de Dados Coletivo (Exemplos de provas pelo Brasil para a comunidade)
+
+# Função inteligente que une o Manual + Automático
 @st.cache_data
-def carregar_dados_publicos():
-    dados = [
-        {"Mês": "Agosto", "Estado": "GO", "Data": "15/08/2026", "Corrida": "Circuito das Estações - Etapa Goiânia", "Distâncias": "5k, 10k", "Inscrição": "https://www.ticketsports.com.br"},
-        {"Mês": "Setembro", "Estado": "SP", "Data": "13/09/2026", "Corrida": "Maratona Internacional de São Paulo", "Distâncias": "5k, 10k, 21k, 42k", "Inscrição": "https://www.ticketsports.com.br"},
-        {"Mês": "Outubro", "Estado": "SC", "Data": "18/10/2026", "Corrida": "Meia Maratona Internacional de Florianópolis", "Distâncias": "5k, 21k", "Inscrição": "https://www.ticketsports.com.br"},
-        {"Mês": "Novembro", "Estado": "PR", "Data": "15/11/2026", "Corrida": "Maratona de Curitiba", "Distâncias": "10k, 42k", "Inscrição": "https://www.ticketsports.com.br"},
-        {"Mês": "Março", "Estado": "GO", "Data": "28/03/2027", "Corrida": "Meia Maratona Oficial de Goiânia", "Distâncias": "5k, 10k, 21k", "Inscrição": "https://www.ticketsports.com.br"},
-    ]
-    return pd.DataFrame(dados)
+def carregar_todos_os_dados():
+    # 1. Carrega os dados do robô (se o arquivo existir)
+    if os.path.exists("corridas_automaticas.csv"):
+        df_auto = pd.read_csv("corridas_automaticas.csv")
+    else:
+        df_auto = pd.DataFrame()
 
-df_comunidade = carregar_dados_publicos()
+    # 2. Carrega os seus dados manuais (se o arquivo existir)
+    if os.path.exists("corridas_manuais.csv"):
+        df_manual = pd.read_csv("corridas_manuais.csv")
+    else:
+        # Se não existir, cria o modelo vazio para você preencher depois
+        df_manual = pd.DataFrame(
+            columns=[
+                "Mês",
+                "Estado",
+                "Data",
+                "Corrida",
+                "Distâncias",
+                "Inscrição",
+            ]
+        )
+        df_manual.to_csv("corridas_manuais.csv", index=False)
 
-# 2. Barra Lateral de Filtros para o Usuário Procurar as Provas
-st.sidebar.header("🔍 Buscar Próximas Corridas")
+    # 3. Junta as duas planilhas em uma só
+    df_final = pd.concat([df_auto, df_manual], ignore_index=True)
 
-# Filtro por Estado (UF)
-estados = ["Todos"] + sorted(list(df_comunidade["Estado"].unique()))
-estado_sel = st.sidebar.selectbox("Filtrar por Estado (UF)", estados)
+    # Remove possíveis corridas duplicadas idênticas
+    df_final = df_final.drop_duplicates(subset=["Data", "Corrida"])
+    return df_final
 
-# Filtro por Mês
-meses = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-mes_sel = st.sidebar.selectbox("Filtrar por Mês", meses)
 
-# Filtro por Distância (Texto livre para aceitar qualquer km: 5k, 21k, Ultramaratonas, etc.)
-distancia_sel = st.sidebar.text_input("Buscar por distância específica (Ex: 5k, 21k, 42k)", "")
+df_comunidade = carregar_todos_os_dados()
 
-# Aplicando a lógica dos filtros no DataFrame
+# --- INTERFACE DE FILTROS ---
+st.sidebar.header("🔍 Filtros de Busca")
+estado_sel = st.sidebar.selectbox(
+    "Estado", ["Todos"] + sorted(list(df_comunidade["Estado"].unique()))
+)
+mes_sel = st.sidebar.selectbox(
+    "Mês",
+    [
+        "Todos",
+        "Janeiro",
+        "Fevereiro",
+        "Março",
+        "Abril",
+        "Maio",
+        "Junho",
+        "Julho",
+        "Agosto",
+        "Setembro",
+        "Outubro",
+        "Novembro",
+        "Dezembro",
+    ],
+)
+distancia_sel = st.sidebar.text_input("Distância (Ex: 21k, 42k)", "")
+
+# Aplicando os filtros
 df_filtrado = df_comunidade.copy()
-
 if estado_sel != "Todos":
     df_filtrado = df_filtrado[df_filtrado["Estado"] == estado_sel]
-
 if mes_sel != "Todos":
     df_filtrado = df_filtrado[df_filtrado["Mês"] == mes_sel]
-
 if distancia_sel:
-    df_filtrado = df_filtrado[df_filtrado["Distâncias"].str.contains(distancia_sel, case=False)]
+    df_filtrado = df_filtrado[
+        df_filtrado["Distâncias"].str.contains(distancia_sel, case=False)
+    ]
 
-# 3. Exibição dos Resultados para o Público
-st.write("---")
-st.subheader(f"📅 Provas Encontradas ({len(df_filtrado)})")
-
+# Exibição dos dados
+st.subheader(f"📅 Provas Disponíveis ({len(df_filtrado)})")
 if not df_filtrado.empty:
     st.dataframe(
         df_filtrado,
@@ -71,11 +100,13 @@ if not df_filtrado.empty:
             "Estado": st.column_config.TextColumn("UF 📍"),
             "Data": st.column_config.TextColumn("Data 📅"),
             "Corrida": st.column_config.TextColumn("Nome do Evento 👟"),
-            "Distâncias": st.column_config.TextColumn("Distâncias Disponíveis 🗺️"),
-            "Inscrição": st.column_config.LinkColumn("Link para Inscrição 🔗", display_text="Ver Inscrição")
+            "Distâncias": st.column_config.TextColumn("Distâncias 🗺️"),
+            "Inscrição": st.column_config.LinkColumn(
+                "Inscrição 🔗", display_text="Ver Inscrição"
+            ),
         },
         hide_index=True,
-        use_container_width=True
+        use_container_width=True,
     )
 else:
-    st.warning("Nenhuma corrida localizada para os filtros selecionados. Tente expandir sua busca!")
+    st.warning("Nenhuma corrida encontrada.")
