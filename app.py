@@ -135,7 +135,7 @@ def carregar_dados_completos():
     if ID_PLANILHA and ID_PLANILHA != "1A0kBTwhI5SY1Fa5DIJL5BvqK_nqHijmBSJtEOGg2qyE":
         try:
             # Link de exportação direta em CSV para o Pandas ler instantaneamente
-            url_sheets = f"https://docs.google.com/spreadsheets/d/{ID_PLANILHA}/export?format=csv"
+            url_sheets = f"https://docs.google.com/spreadsheets/d/1A0kBTwhI5SY1Fa5DIJL5BvqK_nqHijmBSJtEOGg2qyE/export?format=csv"
             df_manual = pd.read_csv(url_sheets)
             
             # Padroniza as colunas da planilha para o caso de digitação diferente
